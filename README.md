@@ -6,7 +6,8 @@ The agents using this reasoner can be found at: https://github.com/Ethavanol/epi
 
 # Getting Started
 ## Prerequisites
-Node Version: 16 (Current, found here: https://nodejs.org/en/download/current/)
+Node Version: 16 (Current, found here: https://nodejs.org/en/download/current/).
+
 The TouIST Service and the TouIST tool. For this, refer to here :
 
 ## Setting up the application
