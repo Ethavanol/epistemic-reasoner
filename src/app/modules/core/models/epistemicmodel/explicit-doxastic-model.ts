@@ -310,7 +310,7 @@ export class ExplicitDoxasticModel extends Graph implements EpistemicModel {
                 }
             }
             case (phi instanceof types.BFormula): {
-                let phi2 = <types.KwFormula> phi;
+                let phi2 = <types.BFormula> phi;
                 let agent = phi2.agent;
                 let psi = phi2.formula;
                 return this.mostPlausible

@@ -53,6 +53,23 @@ export class AgentExplicitEpistemicModel implements EpistemicModel {
      * Returns the true number of edges in the model
      */
     getNumberEdges(): Number {
+        // const numWorlds = this.getNumberWorlds();
+        // let numEdges = 0;
+    
+        // for (let world of this.worldArray) {
+        //     try {
+        //         const successorSet = this.getSuccessors(world, JasonAgentDescription.DEFAULT_AGENT);
+    
+        //         const numSuccessors = await successorSet.getNumber();
+    
+        //         numEdges += numSuccessors;
+    
+        //     } catch (error) {
+        //         console.error('Erreur lors de la récupération des successeurs pour le monde', world, error);
+        //     }
+        // }
+    
+        // return numEdges;
         return 0;
     }
 

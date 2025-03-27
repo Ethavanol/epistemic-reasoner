@@ -170,13 +170,15 @@ export class TouistService {
 
         let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
         let text = await response.text();
-        if (text.startsWith('unsat')) {
+        let unescapedText = text.replace(/\\r\\n/g, '\r\n');
+
+        if (unescapedText.startsWith('unsat')) {
             return [];
         }
 
         let res = [];
         let true_props = undefined;
-        for (let line of text.split('\n')) {
+        for (let line of unescapedText.split('\r\n')) {
             if (line.startsWith('unsat')) {
                 break;
             }

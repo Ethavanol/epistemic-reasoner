@@ -530,6 +530,7 @@ export class ApiRouter {
 
 
                 // Compress formula by substituting with simple proposition names
+                console.log("Constraints :");
                 console.log(cs);
                 let origToNew = {};
                 let newToOrig = {};
@@ -622,7 +623,7 @@ export class ApiRouter {
             try {
                 let events = req.body.events || [];
 
-                if (events === []) {
+                if (events === 0) {
                     console.log('No events to apply.');
                     return res.send({success: false});
                 }
