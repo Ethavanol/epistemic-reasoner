@@ -9,7 +9,7 @@ The agents using this reasoner can be found at: https://github.com/Ethavanol/epi
 Node Version: 16 (Current, found here: https://nodejs.org/en/download/current/).
 
 This API will call another Service written in Python and using the TouIST command line tool.
-The TouIST Service and the TouIST tool need to be installed. For this, refer to here :
+The TouIST Service and the TouIST tool need to be installed. For this, refer to here : https://github.com/Ethavanol/touist-service
 
 ## Setting up the application
 ### 1. Clone the repository
