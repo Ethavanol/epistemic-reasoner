@@ -1,5 +1,5 @@
 ## Epistemic Reasoner API (Express/Node.js Server)
-This is a fork of [hintikkasworld](https://gitlab.inria.fr/fschwarz/hintikkasworld) that has been stripped of anything other than the explicit models and barebones reasoner, and exposes the functionality via a REST API. This server provides a simple API for creating, updating, and reasoning about Explicit Epistemic models. 
+This is a fork of [Michael Vezina Epistemic Reasonner](https://github.com/MikeVezina/epistemic-reasoner). This server provides a simple API for creating, updating, and reasoning about Explicit Epistemic models. 
 
 ## Epistemic Agents
 The agents using this reasoner can be found at: https://github.com/Ethavanol/epistemic-agents
