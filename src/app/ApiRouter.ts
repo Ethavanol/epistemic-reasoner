@@ -30,6 +30,8 @@ import {AgentEventModel} from './modules/core/models/eventmodel/agent-event-mode
 import Readlines from 'n-readlines';
 import * as process from 'process';
 
+let SEPARATE_WORLDS_AGENTS : Boolean;
+
 function createAcesAndEightsModel(): object {
     return {
         'initialModel': {
@@ -282,6 +284,7 @@ export class ApiRouter {
     createApp(app: express.Application, useCache: boolean = false): any {
 
         let currentModel: AgentExplicitEpistemicModel;
+        let listModels: Map<String,AgentExplicitEpistemicModel>;
 
         let createFake = true;
 
@@ -315,7 +318,6 @@ export class ApiRouter {
             console.log('Pointed: ' + val.getInitialEpistemicModel().getPointedWorldID());
 
         }
-        console.log('Hi');
 
         console.log(Object.keys(descCache).length + ' loaded into cache.');
 
@@ -344,7 +346,6 @@ export class ApiRouter {
             }
 
             resultObject.model = currentModel;
-
             res.send(resultObject);
             res.end();
         });
@@ -356,6 +357,16 @@ export class ApiRouter {
          * Output: { result: boolean }
          */
         app.post('/api/single-evaluate', async function(req, res) {
+            if(SEPARATE_WORLDS_AGENTS){
+                let modelID = req.body.id;
+                if(modelID === undefined){
+                    console.log('No id for the world given');
+                    return res.send({
+                        result: false
+                    });
+                }
+                currentModel = listModels.get(modelID);
+            }
             if (!currentModel) {
                 return res.send({result: false, error: 'No Environment.'});
             }
@@ -374,7 +385,6 @@ export class ApiRouter {
             let start = Date.now();
 
             let parsedForm = parseFormulaFromConstraint(formula);
-            console.log(parsedForm);
 
             // let parsedFormula = parseFormulaObject(formula);
 
@@ -398,6 +408,16 @@ export class ApiRouter {
          * Output: { result: boolean }
          */
         app.post('/api/evaluate', async function(req, res) {
+            if(SEPARATE_WORLDS_AGENTS){
+                let modelID = req.body.id;
+                if(modelID === undefined){
+                    console.log('No id for the world given');
+                    return res.send({
+                        result: false
+                    });
+                }
+                currentModel = listModels.get(modelID);
+            }
             if (!currentModel) {
                 return res.send({error: 'No Environment.'});
             }
@@ -419,6 +439,18 @@ export class ApiRouter {
 
                 console.log('No constraints given.');
                 return res.send({success: false});
+            }
+
+            SEPARATE_WORLDS_AGENTS = data.separateWorlds;
+            let modelID : String;
+            if(SEPARATE_WORLDS_AGENTS){
+                modelID = data.id;
+                if(modelID === undefined){
+                    console.log('No id for the world given');
+                    return res.send({
+                        result: false
+                    });
+                }
             }
 
             // Custom location map
@@ -470,6 +502,10 @@ export class ApiRouter {
                     console.log('Pointed: ' + currentModel.getPointedWorldID());
                     console.log('======= =======');
 
+                    if(SEPARATE_WORLDS_AGENTS) {
+                        listModels.set(modelID, currentModel); 
+                    }
+
                     return res.send({success: true, worlds: currentModel.worldNamesArray.length});
                 } catch (err) {
                     console.warn('An error occurred while parsing the input model. Error: ' + err);
@@ -493,18 +529,29 @@ export class ApiRouter {
                 //     constraints.push(JSON.parse(line));
                 // }
 
-                return res.send(await createModelFromConstraints(data.constraints, modelPath));
+                return res.send(await createModelFromConstraints(data, modelPath));
             }
 
 
-            return res.send(await createModelFromConstraints(data.constraints));
+            return res.send(await createModelFromConstraints(data));
         }
 
 
-        async function createModelFromConstraints(constraints, cachedModel: string = undefined) {
+        async function createModelFromConstraints(data, cachedModel: string = undefined) {
+
+            let constraints = data.constraints
             if (!constraints || constraints.length === 0) {
                 console.log('No constraints given.');
                 return {success: false};
+            }
+
+            let modelID: String;
+            if(SEPARATE_WORLDS_AGENTS){
+                modelID = data.id;
+                if(modelID === undefined){
+                    console.log('No id for the world given');
+                    return {success: false};
+                }
             }
 
             console.log('Creating model using ' + constraints.length + ' constraint formulas');
@@ -549,7 +596,7 @@ export class ApiRouter {
                 });
 
 
-                fetchRes = await TouistService.fetchModels(compressedForm.prettyPrint());
+                fetchRes = await TouistService.fetchModels(cs);
             }
             // Mark generation end time
             let genEnd = Date.now();
@@ -571,6 +618,7 @@ export class ApiRouter {
                 // Create epistemic model from valuations
                 currentModel = parseModelFromValuations(fetchRes);
 
+                console.log("CURRENT MODEL :\n" + currentModel.toString())
                 // Create model parse end time
                 let modelParseEnd = Date.now();
 
@@ -588,6 +636,10 @@ export class ApiRouter {
                 console.log('Edges/Simulated: ' + currentModel.getNumberEdges() + ' / ' + currentModel.getNumberFalseEdges());
                 console.log('Pointed: ' + currentModel.getPointedWorldID());
                 console.log('======= =======');
+
+                if(SEPARATE_WORLDS_AGENTS) {
+                    listModels.set(modelID, currentModel); 
+                }
 
                 return {success: true, worlds: currentModel.worldNamesArray.length};
 
@@ -612,16 +664,25 @@ export class ApiRouter {
         }
 
         app.post('/api/apply-event', async function(req, res) {
+            let modelID;
+            if(SEPARATE_WORLDS_AGENTS){
+                modelID = req.body.id;
+                if(modelID === undefined){
+                    console.log('No id for the world given');
+                    return res.send({
+                        result: false
+                    });
+                }
+                currentModel = listModels.get(modelID);
+            }
             if (!currentModel) {
                 console.log('No current model');
                 return res.end();
             }
 
-
-            console.log('apply-event called');
-
             try {
                 let events = req.body.events || [];
+                console.log(events);
 
                 if (events === 0) {
                     console.log('No events to apply.');
@@ -639,9 +700,9 @@ export class ApiRouter {
                 let start = Date.now();
 
                 if (eventIds.length > 5) {
-                    console.log('Received event model with ' + eventIds.length + ' events: ' + JSON.stringify(eventIds));
+                    console.log('Received event model with ' + eventIds.length + ' events: ' + JSON.stringify(eventIds) + '\n');
                 } else {
-                    console.log('Received event model with ' + eventIds.length + ' events');
+                    console.log('Received event model with ' + eventIds.length + ' events \n');
                 }
                 let eventModel = eventModelFromRequest(events);
                 let createEvModEnd = Date.now();
@@ -649,6 +710,7 @@ export class ApiRouter {
                 let result = eventModel.apply(currentModel);
                 let applyEvModEnd = Date.now();
 
+                console.log("RESULT : " + modelID + "\n" +  result);
 
                 if (result === undefined) {
                     console.log('Failed to apply event');
@@ -656,6 +718,9 @@ export class ApiRouter {
                 }
 
                 currentModel = result;
+                if(SEPARATE_WORLDS_AGENTS) {
+                    listModels.set(modelID, currentModel); 
+                }
 
                 console.log('');
                 console.log('Event Metrics:');
@@ -726,7 +791,7 @@ export class ApiRouter {
             }
 
             console.log(Object.keys(formulas).length + ' formulas took ' + (Date.now() - start) + ' or ' + formTot);
-
+     
             return formulaResults;
         }
 

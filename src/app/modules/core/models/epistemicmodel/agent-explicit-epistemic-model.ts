@@ -25,6 +25,17 @@ export class AgentExplicitEpistemicModel implements EpistemicModel {
     worldNamesSet: Set<string> = new Set<string>();
     worldNamesArray: Array<string> = new Array<string>();
 
+    toString(): String {
+        let s = '';
+
+        this.nodes.forEach((value, key) =>{
+            s += (key == "") ?  "Naan" : key;
+            s += " : " + value + "\n";
+        })
+
+        return s;
+    }
+
     getPointedWorld(): World {
         return this.getWorld(this.getPointedWorldID());
     }
