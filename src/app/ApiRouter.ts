@@ -284,7 +284,7 @@ export class ApiRouter {
     createApp(app: express.Application, useCache: boolean = false): any {
 
         let currentModel: AgentExplicitEpistemicModel;
-        let listModels: Map<String,AgentExplicitEpistemicModel>;
+        let listModels: Map<String,AgentExplicitEpistemicModel> = new Map();
 
         let createFake = true;
 
