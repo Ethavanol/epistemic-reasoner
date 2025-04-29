@@ -152,7 +152,7 @@ export class TouistService {
         return true_props;
     }
 
-    static async fetchModels(reqStr: string, limit: number = 10000): Promise<string[][]> {
+    static async fetchModels(reqStr: string, limit: number = 1000000): Promise<string[][]> {
         let data = new FormData();
 
         let args = '--solve';
@@ -168,9 +168,11 @@ export class TouistService {
             body: data
         };
 
+        let responsetest = await fetch(`http://${SERVER_LOCATION}/`);
+
         let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
         let text = await response.text();
-        let unescapedText = text.replace(/^"|"$/g, '').replace(/\\r\\n/g, '\r\n');
+        let unescapedText = JSON.parse(text);
 
         if (unescapedText.startsWith('unsat')) {
             return [];
@@ -178,7 +180,7 @@ export class TouistService {
 
         let res = [];
         let true_props = undefined;
-        for (let line of unescapedText.split('\r\n')) {
+        for (let line of unescapedText.split(/\r?\n/)) {
             if (line.startsWith('unsat')) {
                 break;
             }
