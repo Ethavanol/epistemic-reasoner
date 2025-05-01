@@ -155,20 +155,30 @@ export class TouistService {
     static async fetchModels(reqStr: string, limit: number = 1000000): Promise<string[][]> {
         let data = new FormData();
 
-        let args = '--solve';
-        args += ' --limit=' + limit;
+        let args = '--solve --limit=' + limit;
 
-        data.append('args', args);
-        data.append('stdin', reqStr);
-
-        // console.log(reqStr);
-
+        let payload = {
+            args: args,
+            stdin: reqStr
+        };
+    
         let methodInit = {
             method: 'POST',
-            body: data
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
         };
 
-        let responsetest = await fetch(`http://${SERVER_LOCATION}/`);
+        // data.append('args', args);
+        // data.append('stdin', reqStr);
+
+        // // console.log(reqStr);
+
+        // let methodInit = {
+        //     method: 'POST',
+        //     body: data
+        // };
 
         let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
         let text = await response.text();
