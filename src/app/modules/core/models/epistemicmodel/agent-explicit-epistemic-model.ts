@@ -185,6 +185,10 @@ export class AgentExplicitEpistemicModel implements EpistemicModel {
                 return (c == 1);
             }
             case (phi instanceof types.NotFormula):
+                const basic_formula = (<types.NotFormula> phi).formula;
+                if(basic_formula instanceof types.AtomicFormula && basic_formula.getAtomicString().startsWith("obs(")){
+                    return false;
+                }
                 return !this.modelCheck(w, (<types.NotFormula> phi).formula);
             case (phi instanceof types.KFormula): {
                 let phi2 = <types.KFormula> phi;
