@@ -12,7 +12,7 @@ import {
     YFormula
 } from './modules/core/models/formula/formula';
 import {ExplicitEpistemicModel} from './modules/core/models/epistemicmodel/explicit-epistemic-model';
-import fs from 'fs';
+import fs, { WriteStream } from 'fs';
 import {JasonAgentEnvironment} from './models/JasonAgentEnvironment';
 import {JasonAgentDescription} from './models/JasonAgentDescription';
 import {AgentExplicitEpistemicModel} from './modules/core/models/epistemicmodel/agent-explicit-epistemic-model';
@@ -29,8 +29,38 @@ import {AgentEventModel} from './modules/core/models/eventmodel/agent-event-mode
 
 import Readlines from 'n-readlines';
 import * as process from 'process';
+import * as path from 'path';
+
+
 
 let SEPARATE_WORLDS_AGENTS : Boolean;
+
+function getTimestampedLogDir(baseDir: string = 'logs'): string {
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/:/g, '-').replace(/\..+/, '');
+    const logDir = path.join(baseDir, timestamp);
+
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    return logDir;
+}
+
+function getAgentLogFile(agentName: string, logDir: string): fs.WriteStream {
+    const filePath = path.join(logDir, `${agentName}.log`);
+    return fs.createWriteStream(filePath, { flags: 'a' });  // 'a' pour append
+}
+
+
+function log(message: string, agentLog?: fs.WriteStream) {
+    if (agentLog) {
+        agentLog.write(message + '\n');
+    }
+}
+
+
+
 
 function createAcesAndEightsModel(): object {
     return {
@@ -299,6 +329,8 @@ export class ApiRouter {
         // constraintsToModels((name) => name.indexOf('_DISABLE') >= 0);
         constraintsToModels((name) => name.indexOf('_DISABLE') >= 0);
 
+        let logDir : string;
+
 
         const file = 'desc_cache.json';
         let descCache = {};
@@ -357,8 +389,11 @@ export class ApiRouter {
          * Output: { result: boolean }
          */
         app.post('/api/single-evaluate', async function(req, res) {
+            let modelID:string;
+            let agentLog : WriteStream;
             if(SEPARATE_WORLDS_AGENTS){
                 let modelID = req.body.id;
+                agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
                     console.log('No id for the world given');
                     return res.send({
@@ -391,6 +426,11 @@ export class ApiRouter {
             let evalStart = Date.now();
             let result = currentModel.checkSync(parsedForm);
             let delta = Date.now() - evalStart;
+
+            if(SEPARATE_WORLDS_AGENTS) {
+                agentLog.write('***SINGLE-EVALUATE*** \n');
+                agentLog.write(`FORMULA : ${parsedForm.prettyPrint()} --> ${result}  \n`);
+            }
 
             console.log('Single formula took ' + (Date.now() - start) + '(total), or eval time: ' + delta);
 
@@ -434,6 +474,8 @@ export class ApiRouter {
         });
 
         async function createModelRequest(req, res: express.Response) {
+            logDir = getTimestampedLogDir();
+            console.log('LOG DIR : ', logDir);
             let data = req.body;
             if (!data || (!data.constraints && !data.locations_model)) {
 
@@ -442,9 +484,12 @@ export class ApiRouter {
             }
 
             SEPARATE_WORLDS_AGENTS = data.separateWorlds;
-            let modelID : String;
+            let agentLog : WriteStream;
+            let modelID : string;
             if(SEPARATE_WORLDS_AGENTS){
                 modelID = data.id;
+                agentLog = getAgentLogFile(modelID, logDir);
+                agentLog.write(`Agent ${modelID} started\n`);
                 if(modelID === undefined){
                     console.log('No id for the world given');
                     return res.send({
@@ -486,24 +531,23 @@ export class ApiRouter {
 
                     // Create model parse end time
                     let modelParseEnd = Date.now();
-
-                    console.log('');
-                    console.log('Model Metrics:');
-                    console.log('------- -------');
-                    // console.log('Cached: ' + isCached);
-                    // console.log('Generation Time (ms): ' + (genEnd - start));
-                    // console.log('Model Creation Time (ms): ' + (modelParseEnd - genEnd));
-                    console.log('Total Time (ms): ' + (modelParseEnd - start));
-                    console.log('------- -------');
-                    console.log('Constraints: ' + data.locations_model);
-                    console.log('Worlds: ' + currentModel.getNumberWorlds());
-                    console.log('Atomic Propositions: ' + currentModel.getAtomicPropositions().size);
-                    console.log('Edges/Simulated: ' + currentModel.getNumberEdges() + ' / ' + currentModel.getNumberFalseEdges());
-                    console.log('Pointed: ' + currentModel.getPointedWorldID());
-                    console.log('======= =======');
+                    
+                    let logText = '';
+                    logText += `CURRENT MODEL :\n${currentModel.toString()} \n`;
+                    logText += 'Model Metrics:\n';
+                    logText += '------- -------\n';
+                    logText += `Total Time (ms): ${modelParseEnd - start}\n`;
+                    logText += `Constraints: ${data.locations_model}\n`;
+                    logText += `Worlds: ${currentModel.getNumberWorlds()}\n`;
+                    logText += `Atomic Propositions: ${currentModel.getAtomicPropositions().size}\n`;
+                    logText += `Edges/Simulated: ${currentModel.getNumberEdges()} / ${currentModel.getNumberFalseEdges()}\n`;
+                    logText += `Pointed: ${currentModel.getPointedWorldID()}\n`;
+                    logText += '======= =======\n\n';
+                    console.log(logText);
 
                     if(SEPARATE_WORLDS_AGENTS) {
                         listModels.set(modelID, currentModel); 
+                        agentLog.write(logText);
                     }
 
                     return res.send({success: true, worlds: currentModel.worldNamesArray.length});
@@ -545,14 +589,17 @@ export class ApiRouter {
                 return {success: false};
             }
 
-            let modelID: String;
+            let agentLog : WriteStream;
+            let modelID : string;
             if(SEPARATE_WORLDS_AGENTS){
                 modelID = data.id;
+                agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
                     console.log('No id for the world given');
                     return {success: false};
                 }
             }
+
 
             console.log('Creating model using ' + constraints.length + ' constraint formulas');
 
@@ -577,8 +624,8 @@ export class ApiRouter {
 
 
                 // Compress formula by substituting with simple proposition names
-                console.log("Constraints :");
-                console.log(cs);
+                // console.log("Constraints :");
+                // console.log(cs);
                 let origToNew = {};
                 let newToOrig = {};
 
@@ -618,27 +665,26 @@ export class ApiRouter {
                 // Create epistemic model from valuations
                 currentModel = parseModelFromValuations(fetchRes);
 
-                console.log("CURRENT MODEL :\n" + currentModel.toString())
                 // Create model parse end time
                 let modelParseEnd = Date.now();
 
-                console.log('');
-                console.log('Model Metrics:');
-                console.log('------- -------');
-                // console.log('Cached: ' + isCached);
-                console.log('Generation Time (ms): ' + (genEnd - start));
-                console.log('Model Creation Time (ms): ' + (modelParseEnd - genEnd));
-                console.log('Total Time (ms): ' + (modelParseEnd - start));
-                console.log('------- -------');
-                console.log('Constraints: ' + constraints.length);
-                console.log('Worlds: ' + currentModel.getNumberWorlds());
-                console.log('Atomic Propositions: ' + currentModel.getAtomicPropositions().size);
-                console.log('Edges/Simulated: ' + currentModel.getNumberEdges() + ' / ' + currentModel.getNumberFalseEdges());
-                console.log('Pointed: ' + currentModel.getPointedWorldID());
-                console.log('======= =======');
+
+                let logText = '';
+                logText += `CURRENT MODEL :\n${currentModel.toString()} \n`;
+                logText += 'Model Metrics:\n';
+                logText += '------- -------\n';
+                logText += `Total Time (ms): ${modelParseEnd - start}\n`;
+              //  logText += `Constraints: ${cs}\n`;
+                logText += `Worlds: ${currentModel.getNumberWorlds()}\n`;
+                logText += `Atomic Propositions: ${currentModel.getAtomicPropositions().size}\n`;
+                logText += `Edges/Simulated: ${currentModel.getNumberEdges()} / ${currentModel.getNumberFalseEdges()}\n`;
+                logText += `Pointed: ${currentModel.getPointedWorldID()}\n`;
+                logText += '======= =======\n\n';
+                console.log(logText);
 
                 if(SEPARATE_WORLDS_AGENTS) {
                     listModels.set(modelID, currentModel); 
+                    agentLog.write(logText);
                 }
 
                 return {success: true, worlds: currentModel.worldNamesArray.length};
@@ -664,9 +710,11 @@ export class ApiRouter {
         }
 
         app.post('/api/apply-event', async function(req, res) {
-            let modelID;
+            let agentLog : WriteStream;
+            let modelID : string;
             if(SEPARATE_WORLDS_AGENTS){
                 modelID = req.body.id;
+                agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
                     console.log('No id for the world given');
                     return res.send({
@@ -684,6 +732,11 @@ export class ApiRouter {
                 let events = req.body.events || [];
                 console.log(events);
 
+                if(SEPARATE_WORLDS_AGENTS) {
+                    agentLog.write('\n***APPLY-EVENT*** \n\n');
+                }
+
+
                 if (events === 0) {
                     console.log('No events to apply.');
                     return res.send({success: false});
@@ -695,6 +748,10 @@ export class ApiRouter {
 
                 for (let ev of events) {
                     eventIds.push(ev.id);
+                    if(SEPARATE_WORLDS_AGENTS) {
+                        agentLog.write(`EVENT : ${ev.id} \n\n`);
+                    }
+    
                 }
 
                 let start = Date.now();
@@ -710,31 +767,36 @@ export class ApiRouter {
                 let result = eventModel.apply(currentModel);
                 let applyEvModEnd = Date.now();
 
-                console.log("RESULT : " + modelID + "\n" +  result);
+                currentModel = result;
+
+                let logText = '';
+                logText += `RESULT : ${modelID} \n${result} \n`
+                logText += 'Event Metrics:\n';
+                logText += '------- -------\n';
+                logText += `Event Creation (ms): ${createEvModEnd - start}\n`;
+                logText += `Event Application (ms): ${applyEvModEnd - createEvModEnd}\n`;
+                logText += `Total Time (ms): ${applyEvModEnd - start}\n`;
+                logText += '------- -------\n';
+                logText += `Events: ${eventIds.length}\n`;
+                logText += `Previous Worlds: ${prevWorlds}\n`;
+                logText += `Resulting Worlds: ${currentModel.getNumberWorlds()}\n`;
+                logText += `Edges/Simulated: ${currentModel.getNumberEdges()} / ${currentModel.getNumberFalseEdges()}\n`;
+                logText += '======= =======\n';
+                logText += '\n';
+
+
+                console.log(logText);
 
                 if (result === undefined) {
                     console.log('Failed to apply event');
                     return res.send({success: false});
                 }
 
-                currentModel = result;
                 if(SEPARATE_WORLDS_AGENTS) {
                     listModels.set(modelID, currentModel); 
+                    agentLog.write(logText);
                 }
 
-                console.log('');
-                console.log('Event Metrics:');
-                console.log('------- -------');
-                console.log('Event Creation (ms): ' + (createEvModEnd - start));
-                console.log('Event Application (ms): ' + (applyEvModEnd - createEvModEnd));
-                console.log('Total Time (ms): ' + (applyEvModEnd - start));
-                console.log('------- -------');
-                console.log('Events: ' + eventIds.length);
-                console.log('Previous Worlds: ' + prevWorlds);
-                console.log('Resulting Worlds: ' + currentModel.getNumberWorlds());
-                console.log('Edges/Simulated: ' + currentModel.getNumberEdges() + ' / ' + currentModel.getNumberFalseEdges());
-                console.log('======= =======');
-                console.log('');
 
                 let numOnEvents = 0;
 

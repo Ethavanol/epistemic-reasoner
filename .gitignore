@@ -6,3 +6,4 @@ package-lock.json
 .idea/
 /desc_cache.json
 /cache/
+logs/
