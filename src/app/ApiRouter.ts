@@ -427,12 +427,12 @@ export class ApiRouter {
             let result = currentModel.checkSync(parsedForm);
             let delta = Date.now() - evalStart;
 
-            if(SEPARATE_WORLDS_AGENTS) {
-                agentLog.write('***SINGLE-EVALUATE*** \n');
-                agentLog.write(`FORMULA : ${parsedForm.prettyPrint()} --> ${result}  \n`);
+            if(SEPARATE_WORLDS_AGENTS && result) {
+                agentLog.write('\n\n*****SINGLE-EVALUATE***** \n\n');
+                agentLog.write(`FORMULA : ${parsedForm.prettyPrint()} --> ${result}  \n\n`);
             }
 
-            console.log('Single formula took ' + (Date.now() - start) + '(total), or eval time: ' + delta);
+          //  console.log('Single formula took ' + (Date.now() - start) + '(total), or eval time: ' + delta);
 
             return res.send({
                 result: result
@@ -746,12 +746,18 @@ export class ApiRouter {
 
                 let eventIds = [];
 
+                let logIt = true;
                 for (let ev of events) {
                     eventIds.push(ev.id);
-                    if(SEPARATE_WORLDS_AGENTS) {
-                        agentLog.write(`EVENT : ${ev.id} \n\n`);
+                    if(SEPARATE_WORLDS_AGENTS && logIt) {
+                        if (ev.id.startsWith("+on(moved(")){
+                            agentLog.write(`EVENT : ${ev.id.split(":")[0]} \n\n`);
+                            logIt = false;
+                        } else {
+                            agentLog.write(`EVENT : ${ev.id} \n\n`);
+                        }
                     }
-    
+
                 }
 
                 let start = Date.now();
@@ -770,7 +776,8 @@ export class ApiRouter {
                 currentModel = result;
 
                 let logText = '';
-                logText += `RESULT : ${modelID} \n${result} \n`
+                logText += `RESULT : ${modelID} \n`
+                logText += `${result} \n`
                 logText += 'Event Metrics:\n';
                 logText += '------- -------\n';
                 logText += `Event Creation (ms): ${createEvModEnd - start}\n`;
@@ -785,7 +792,7 @@ export class ApiRouter {
                 logText += '\n';
 
 
-                console.log(logText);
+              //  console.log(logText);
 
                 if (result === undefined) {
                     console.log('Failed to apply event');
