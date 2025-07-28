@@ -1,7 +1,7 @@
 ## Epistemic Reasoner API (Express/Node.js Server)
 This is a fork of [Michael Vezina Epistemic Reasonner](https://github.com/MikeVezina/epistemic-reasoner). This server provides a simple API for creating, updating, and reasoning about Explicit Epistemic models. 
 
-## Epistemic Agents
+## Epistemic Jason
 The Jason BDI extension using this reasoner can be found at: https://github.com/Ethavanol/epistemic-jason
 
 # Getting Started
