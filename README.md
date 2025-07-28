@@ -30,4 +30,4 @@ npm start
 
 ## Configuration and services
 
-You will be able to find logs of agents in a logs folder that will be created at runtime.
+You will be able to find logs of agents in a logs/ folder that will be created at runtime.
