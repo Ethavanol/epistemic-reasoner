@@ -11,4 +11,5 @@ export class WorldValuation extends World {
 
   modelCheck(p: string) { return this.valuation.isPropositionTrue(p); }
   toString() { return this.valuation.toString(); }
+  equals(otherWorld: WorldValuation) { return this.valuation.equals(otherWorld.valuation)}
 }

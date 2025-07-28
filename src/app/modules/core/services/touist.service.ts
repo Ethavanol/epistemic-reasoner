@@ -137,19 +137,29 @@ export class TouistService {
             body: data
         };
 
-        let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
-        let text = await response.text();
-        if (text.startsWith('unsat')) {
-            return [];
-        }
-        let true_props = [];
-        for (let line of text.split('\n')) {
-            let s = line.split(' ');
-            if (s[0] == '1') {
-                true_props.push(s[1]);
+        try {
+            let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
+
+            if (!response.ok) {
+                throw new Error(`Touist server responded with status ${response.status}`);
             }
+
+            let text = await response.text();
+            if (text.startsWith('unsat')) {
+                return [];
+            }
+            let true_props = [];
+            for (let line of text.split('\n')) {
+                let s = line.split(' ');
+                if (s[0] == '1') {
+                    true_props.push(s[1]);
+                }
+            }
+            return true_props;
+        } catch (err) {
+            // Relayer l’erreur avec contexte
+            throw new Error(`Failed to fetch models from Touist server: ${err.message}`);
         }
-        return true_props;
     }
 
     static async fetchModels(reqStr: string, limit: number = 1000000): Promise<string[][]> {
@@ -170,53 +180,55 @@ export class TouistService {
             body: JSON.stringify(payload)
         };
 
-        // data.append('args', args);
-        // data.append('stdin', reqStr);
+        try {
+            let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
 
-        // // console.log(reqStr);
+            let text = await response.text();
+            let unescapedText = JSON.parse(text);
 
-        // let methodInit = {
-        //     method: 'POST',
-        //     body: data
-        // };
-
-        let response = await fetch(`http://${SERVER_LOCATION}/touist_cmd`, methodInit);
-        let text = await response.text();
-        let unescapedText = JSON.parse(text);
-
-        if (unescapedText.startsWith('unsat')) {
-            return [];
-        }
-
-        let res = [];
-        let true_props = undefined;
-        for (let line of unescapedText.split(/\r?\n/)) {
-            if (line.startsWith('unsat')) {
-                break;
+            if (!response.ok) {
+                throw new Error(unescapedText.error);
             }
-            if (line.startsWith('==== model')) {
-                if (true_props !== undefined) {
-                    res.push(true_props);
+
+            let output = unescapedText.output;
+
+            if (output.startsWith('unsat')) {
+                return [];
+            }
+
+            let res = [];
+            let true_props = undefined;
+            for (let line of output.split(/\r?\n/)) {
+                if (line.startsWith('unsat')) {
+                    break;
                 }
-                true_props = [];
-                continue;
-            }
-            let s = line.split(' ');
-            if (s.length != 2) {
-                continue;
-            }
-            if (s[0] == '1') {
-                if (s[1].indexOf('\r') >= 0) {
-                    s[1] = s[1].replace('\r', '');
+                if (line.startsWith('==== model')) {
+                    if (true_props !== undefined) {
+                        res.push(true_props);
+                    }
+                    true_props = [];
+                    continue;
                 }
+                let s = line.split(' ');
+                if (s.length != 2) {
+                    continue;
+                }
+                if (s[0] == '1') {
+                    if (s[1].indexOf('\r') >= 0) {
+                        s[1] = s[1].replace('\r', '');
+                    }
 
-                true_props.push(s[1]);
+                    true_props.push(s[1]);
+                }
             }
+            if (true_props !== undefined) {
+                res.push(true_props);
+            }
+            return res;
+        } catch (err) {
+            // Relayer l’erreur avec contexte
+            throw new Error(`Failed to fetch models from Touist server: ${err.message}`);
         }
-        if (true_props !== undefined) {
-            res.push(true_props);
-        }
-        return res;
     }
 
     static async parse(text)

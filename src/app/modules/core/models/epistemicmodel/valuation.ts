@@ -19,7 +19,14 @@ export class Valuation {
     }
 
     isPropositionTrue(p: string) {
-        return !!this.propositions[p];
+        let prop = p.split('/');
+        for(let pr of prop){
+            let res = !!this.propositions[pr];
+            if (!res){
+                return res;
+            }
+        }
+        return true;
     }
 
     /* the use of Maps is overkilling. Please use getPropositionMap */
@@ -64,5 +71,19 @@ export class Valuation {
         }
 
         return clone;
+    }
+
+    equals(other: Valuation): boolean {
+        const keysA = Object.keys(this.propositions);
+        const keysB = Object.keys(other.propositions);
+    
+        if (keysA.length !== keysB.length) return false;
+    
+        for (const key of keysA) {
+            if (!(key in other.propositions)) return false;
+            if (this.propositions[key] !== other.propositions[key]) return false;
+        }
+    
+        return true;
     }
 }

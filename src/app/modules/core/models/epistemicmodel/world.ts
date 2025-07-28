@@ -11,4 +11,5 @@ export abstract class World {
    */
   abstract modelCheck(phi: string);
   abstract toString();
+  abstract equals(otherWorld: World);
 }

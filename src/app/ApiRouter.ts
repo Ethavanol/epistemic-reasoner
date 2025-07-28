@@ -30,6 +30,7 @@ import {AgentEventModel} from './modules/core/models/eventmodel/agent-event-mode
 import Readlines from 'n-readlines';
 import * as process from 'process';
 import * as path from 'path';
+import { error } from 'console';
 
 
 
@@ -367,20 +368,33 @@ export class ApiRouter {
 
 
         app.get('/api/model', async function(req, res) {
+            let agentLog;
+            if (SEPARATE_WORLDS_AGENTS) {
+                // get the ID from the request parameters
+                let modelID = String(req.query.id);
+                agentLog = getAgentLogFile(modelID, logDir);
+        
+                if (modelID === undefined) {
+                    console.log('No id for the agent given');
+                    return res.send({
+                        result: new Error("No id for the agent given")
+                    });
+                }
+                currentModel = listModels.get(modelID);
+                agentLog.write(`GETTING MODEL FOR AGENT`);
+            }
+        
             if (!currentModel) {
-                return res.send({success: false, error: 'No Environment.'});
+                return res.send({ success: false, error: 'No Environment.' });
             }
-
+        
             let resultObject: any = {};
-
-            if (req.query && req.query.description) {
-                // resultObject.description = curEnvironment.getExampleDescription();
-            }
-
-            resultObject.model = currentModel;
-            res.send(resultObject);
-            res.end();
+        
+            resultObject.model = currentModel.worldArray;
+            res.json({ model: resultObject.model });
+            
         });
+
 
         /**
          * Evaluate a formula in the current state of the model.
@@ -393,13 +407,13 @@ export class ApiRouter {
             let agentLog : WriteStream;
             if(SEPARATE_WORLDS_AGENTS){
                 let modelID = req.body.id;
-                agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
-                    console.log('No id for the world given');
+                    console.log('No id for the agent given');
                     return res.send({
                         result: false
                     });
                 }
+                agentLog = getAgentLogFile(modelID, logDir);
                 currentModel = listModels.get(modelID);
             }
             if (!currentModel) {
@@ -417,17 +431,12 @@ export class ApiRouter {
             }
 
 
-            let start = Date.now();
-
             let parsedForm = parseFormulaFromConstraint(formula);
 
-            // let parsedFormula = parseFormulaObject(formula);
-
-            let evalStart = Date.now();
             let result = currentModel.checkSync(parsedForm);
-            let delta = Date.now() - evalStart;
 
-            if(SEPARATE_WORLDS_AGENTS && result) {
+            // remove the && result here to see all the evaluations
+            if(SEPARATE_WORLDS_AGENTS) {
                 agentLog.write('\n\n*****SINGLE-EVALUATE***** \n\n');
                 agentLog.write(`FORMULA : ${parsedForm.prettyPrint()} --> ${result}  \n\n`);
             }
@@ -448,10 +457,12 @@ export class ApiRouter {
          * Output: { result: boolean }
          */
         app.post('/api/evaluate', async function(req, res) {
+            let agentLog : WriteStream;
             if(SEPARATE_WORLDS_AGENTS){
                 let modelID = req.body.id;
+                agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
-                    console.log('No id for the world given');
+                    console.log('No id for the agent given');
                     return res.send({
                         result: false
                     });
@@ -459,16 +470,51 @@ export class ApiRouter {
                 currentModel = listModels.get(modelID);
             }
             if (!currentModel) {
-                return res.send({error: 'No Environment.'});
+                return res.send({result: false, error: 'No Environment.'});
             }
 
             let formulas = req.body.formulas || '';
-            // let currentModel = curEnvironment.getEpistemicModel();
 
-            let formulaResults = evaluateFormulas(formulas, currentModel);
+            let evalStart = Date.now();
 
+            let formulaTxt = "";
+
+            for (let formula of formulas){
+                let parsedForm = parseFormulaFromConstraint(formula);
+                formulaTxt += parsedForm.prettyPrint();
+            }
+
+            if(SEPARATE_WORLDS_AGENTS) {
+                agentLog.write('\n*****EVALUATE***** \n\n');
+                agentLog.write(`FORMULA : ${formulaTxt}`);
+            }
+            
+            for(let formula of formulas){
+                let parsedForm = parseFormulaFromConstraint(formula);
+                let result = currentModel.checkSync(parsedForm);
+                
+                // if you want to see the result foreach separated formula uncomment the lines down there
+                // if(SEPARATE_WORLDS_AGENTS) {
+                //     agentLog.write(`FORMULA : ${parsedForm.prettyPrint} --> ${result}  \n`);
+                // }
+
+                // If at least one proposition is false then the global one is false
+                if(!result){
+                    if(SEPARATE_WORLDS_AGENTS) {
+                        agentLog.write(` --> ${result} \n`);
+                    }
+                    return res.send({
+                        result: result
+                    });
+                }
+            }
+
+            console.log(formulaTxt);
+            if(SEPARATE_WORLDS_AGENTS) {
+                agentLog.write(' --> true \n');
+            }
             res.send({
-                result: formulaResults
+                result: true
             });
 
         });
@@ -491,7 +537,7 @@ export class ApiRouter {
                 agentLog = getAgentLogFile(modelID, logDir);
                 agentLog.write(`Agent ${modelID} started\n`);
                 if(modelID === undefined){
-                    console.log('No id for the world given');
+                    console.log('No id for the agent given');
                     return res.send({
                         result: false
                     });
@@ -573,11 +619,22 @@ export class ApiRouter {
                 //     constraints.push(JSON.parse(line));
                 // }
 
-                return res.send(await createModelFromConstraints(data, modelPath));
+                const result = await createModelFromConstraints(data, modelPath);
+
+                if (result.success) {
+                    return res.status(200).json(result);
+                } else {
+                    return res.status(500).json(result);
+                }
             }
 
+            const result = await createModelFromConstraints(data);
 
-            return res.send(await createModelFromConstraints(data));
+            if (result.success) {
+                return res.status(200).json(result);
+            } else {
+                return res.status(500).json(result);
+            }
         }
 
 
@@ -595,7 +652,7 @@ export class ApiRouter {
                 modelID = data.id;
                 agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
-                    console.log('No id for the world given');
+                    console.log('No id for the agent given');
                     return {success: false};
                 }
             }
@@ -643,7 +700,12 @@ export class ApiRouter {
                 });
 
 
-                fetchRes = await TouistService.fetchModels(cs);
+                try {
+                    fetchRes = await TouistService.fetchModels(cs);
+                } catch (err) {
+                    console.error('[Touist Error] Failed to fetch models:', err.message);
+                    return { success: false, error: err.message };
+                }
             }
             // Mark generation end time
             let genEnd = Date.now();
@@ -667,7 +729,6 @@ export class ApiRouter {
 
                 // Create model parse end time
                 let modelParseEnd = Date.now();
-
 
                 let logText = '';
                 logText += `CURRENT MODEL :\n${currentModel.toString()} \n`;
@@ -700,13 +761,36 @@ export class ApiRouter {
         function eventModelFromRequest(events): AgentEventModel {
             let evModel = new AgentEventModel();
 
+            // here we want to remove the event that lead to nothing in case there are many events: for example +on(~obs(X)) : ~obs(X)
+
+            let size = events.length;
             for (let e of events) {
                 let {id, pre, post} = e;
+
+                // if we have more than 1 event and one of them is of the form +on(X) : X, we remove it (it doesn't give any information)
+                if(size > 1){
+                    let array = id.split(":");
+                    let content = extractContent(array[0]);
+                    if (array[1].trim().endsWith(".")) {
+                        array[1] = array[1].trim().slice(0, -1);
+                    }
+                    if (content === array[1]) {
+                        continue;
+                    }
+                }
 
                 evModel.addAction(id, parseFormulaFromConstraint(pre), parsePostFromRequest(post));
             }
 
             return evModel;
+        }
+
+        function extractContent(str: string): string {
+            str = str.trim();
+            if (str.startsWith("+on(") && str.endsWith(")")) {
+              return str.slice(4, -1);
+            }
+            return str;
         }
 
         app.post('/api/apply-event', async function(req, res) {
@@ -716,7 +800,7 @@ export class ApiRouter {
                 modelID = req.body.id;
                 agentLog = getAgentLogFile(modelID, logDir);
                 if(modelID === undefined){
-                    console.log('No id for the world given');
+                    console.log('No id for the agent given');
                     return res.send({
                         result: false
                     });
@@ -828,6 +912,68 @@ export class ApiRouter {
 
             res.end();
         });
+
+        app.post('/api/replace-props', async function(req, res) {
+            let agentLog : WriteStream;
+            let modelID : string;
+            // Consider this value always true
+            if(SEPARATE_WORLDS_AGENTS){
+                modelID = req.body.id;
+                agentLog = getAgentLogFile(modelID, logDir);
+                if(modelID === undefined){
+                    console.log('No id for the agent given');
+                    return res.send({
+                        result: false
+                    });
+                }
+                currentModel = listModels.get(modelID);
+                agentLog.write('\n***REPLACE-PROPS*** \n\n');
+            }
+
+            if (!currentModel) {
+                console.log('No current model');
+                return res.end();
+            }
+
+            try{
+                // Get the world and the new propositions
+                let worldAndNewProps = req.body.props || [];
+
+                if(worldAndNewProps === 0){
+                    console.log('No replacements to apply.');
+                    return res.send({success: false});
+                }
+
+                let start = Date.now();
+
+                let result = currentModel.applyReplacePropositions(worldAndNewProps);
+
+                let applyReplacementProps = Date.now();
+
+                currentModel = result;
+
+                let logText = '';
+                logText += `RESULT : ${modelID} \n`
+                logText += `${result} \n`
+
+                if (result === undefined) {
+                    console.log('Failed to replace props');
+                    return res.send({success: false});
+                }
+
+                if(SEPARATE_WORLDS_AGENTS) {
+                    listModels.set(modelID, currentModel); 
+                    agentLog.write(logText);
+                }
+
+                console.log('Total Time (ms): ' + (applyReplacementProps - start));
+                console.log('Memory check -- Breakpoint here? ' + (process.memoryUsage().heapUsed / 1000 / 1000));
+                return res.send({success: true});
+
+            } catch(error) {
+                console.error('There was an error updating the model: ' + error);
+            }
+        })
 
 
         function evaluateFormulas(formulas: any[] | any, model: AgentExplicitEpistemicModel): { [id: number]: boolean } {

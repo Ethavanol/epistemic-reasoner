@@ -185,10 +185,6 @@ export class AgentExplicitEpistemicModel implements EpistemicModel {
                 return (c == 1);
             }
             case (phi instanceof types.NotFormula):
-                const basic_formula = (<types.NotFormula> phi).formula;
-                if(basic_formula instanceof types.AtomicFormula && basic_formula.getAtomicString().startsWith("obs(")){
-                    return false;
-                }
                 return !this.modelCheck(w, (<types.NotFormula> phi).formula);
             case (phi instanceof types.KFormula): {
                 let phi2 = <types.KFormula> phi;
@@ -326,4 +322,38 @@ export class AgentExplicitEpistemicModel implements EpistemicModel {
 
         return props;
     }
+
+    applyReplacePropositions(worldAndNewProps) : AgentExplicitEpistemicModel{
+
+        let ME = new AgentExplicitEpistemicModel();
+
+        for(let wp of worldAndNewProps){
+            const newProps = wp.newprops;
+            if(newProps == undefined){ throw new Error('newProps can\'t be undefined')}
+
+            //get the world that corresponds in the currentModel
+            //we double check that all worlds we modified are in the current model
+            const worldInModel = this.worldArray.find(w => w.equals(wp.world)) as WorldValuation;
+
+            if (!worldInModel) {
+                console.warn("Monde introuvable dans le modèle :", wp.world);
+                continue;
+            }
+
+            const newPropositionsToReplace: { [id: string]: boolean } = {};
+            for(let prop of newProps){
+                newPropositionsToReplace[prop.prop] = true;
+            }
+
+            ME.addWorld(this.nodeToID.get(worldInModel), new WorldValuation(new Valuation(newPropositionsToReplace)));
+        }
+
+        // Knowledge valuation has contradictions if there are no worlds (i.e. no pointed world was chosen).
+        if (ME.getNumberWorlds() === 0) {
+            console.warn('No resulting worlds.');
+        }
+
+        return ME;
+    }
+
 }
